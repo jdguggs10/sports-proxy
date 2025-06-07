@@ -16,12 +16,10 @@ class CacheManager {
    * Generate cache key from request
    */
   _generateKey(tool, args) {
-    const sortedArgs = Object.keys(args).sort().reduce((sorted, key) => {
-      sorted[key] = args[key];
-      return sorted;
-    }, {});
-    
-    return `sports:${tool}:${JSON.stringify(sortedArgs)}`;
+    // More efficient key generation - avoid object recreation
+    const keys = Object.keys(args).sort();
+    const sortedPairs = keys.map(key => `${key}:${args[key]}`).join('|');
+    return `sports:${tool}:${sortedPairs}`;
   }
 
   /**

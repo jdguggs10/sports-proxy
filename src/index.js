@@ -1,9 +1,9 @@
 /**
  * Sports Proxy - Cloudflare Worker
- * MCP Orchestrator with Streamable HTTP and SSE endpoints
+ * OpenAI Responses API native MCP orchestrator with advanced caching and streaming
  */
 
-const { MCPOrchestrator } = require('./mcp/orchestrator');
+const { ResponsesAPIOrchestrator } = require('./mcp/orchestrator');
 const { CacheManager } = require('./cache/manager');
 
 /**
@@ -45,12 +45,54 @@ function createErrorResponse(message, status = 400) {
 }
 
 /**
- * Handle MCP protocol requests
+ * Handle OpenAI Responses API requests natively
  */
-async function handleMCP(request, env) {
+async function handleResponsesAPI(request, env) {
   try {
     const body = await request.json();
-    const orchestrator = new MCPOrchestrator(env);
+    const orchestrator = new ResponsesAPIOrchestrator(env);
+    
+    // Handle the Responses API request format
+    const { model = "gpt-4.1", input, tools, previous_response_id, instructions, stream = false, memories } = body;
+    
+    // Process the request through our orchestrator
+    const result = await orchestrator.processResponsesAPIRequest({
+      model,
+      input,
+      tools,
+      previous_response_id,
+      instructions,
+      stream,
+      memories
+    });
+    
+    if (stream) {
+      return new Response(result.stream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+          ...getCorsHeaders()
+        }
+      });
+    }
+    
+    return new Response(JSON.stringify(result), {
+      headers: { "Content-Type": "application/json", ...getCorsHeaders() }
+    });
+    
+  } catch (error) {
+    return createErrorResponse(`Responses API error: ${error.message}`, 500);
+  }
+}
+
+/**
+ * Handle legacy MCP protocol requests (deprecated - use Responses API)
+ */
+async function handleLegacyMCP(request, env) {
+  try {
+    const body = await request.json();
+    const orchestrator = new ResponsesAPIOrchestrator(env);
     
     switch (body.method) {
       case 'tools/list':
@@ -95,7 +137,7 @@ async function handleMCP(request, env) {
         return createErrorResponse(`Unknown MCP method: ${body.method}`);
     }
   } catch (error) {
-    return createErrorResponse(`MCP error: ${error.message}`, 500);
+    return createErrorResponse(`Legacy MCP error: ${error.message}`, 500);
   }
 }
 
@@ -128,7 +170,10 @@ async function handleSSE(request, env) {
   const writer = writable.getWriter();
   
   // Start processing in background
-  processSSERequest(tool, args, writer, env);
+  processSSERequest(tool, args, writer, env).catch(error => {
+    console.error('SSE processing error:', error);
+    writer.close();
+  });
   
   return new Response(readable, {
     headers: {
@@ -150,7 +195,7 @@ async function processSSERequest(tool, args, writer, env) {
     // Send initial connection event
     await writer.write(encoder.encode(`event: connected\ndata: {"status":"connected","tool":"${tool}"}\n\n`));
     
-    const orchestrator = new MCPOrchestrator(env);
+    const orchestrator = new ResponsesAPIOrchestrator(env);
     const cache = new CacheManager(env);
     
     // Check cache first
@@ -214,7 +259,7 @@ async function handleStreamableHTTP(request, env) {
       return createErrorResponse('Missing tool parameter');
     }
     
-    const orchestrator = new MCPOrchestrator(env);
+    const orchestrator = new ResponsesAPIOrchestrator(env);
     const cache = new CacheManager(env);
     
     // Check cache first
@@ -265,7 +310,7 @@ async function handleStreamableHTTP(request, env) {
  * Handle health check
  */
 async function handleHealth(env) {
-  const orchestrator = new MCPOrchestrator(env);
+  const orchestrator = new ResponsesAPIOrchestrator(env);
   const cache = new CacheManager(env);
   
   const [mcpHealth, cacheStats] = await Promise.all([
@@ -299,9 +344,13 @@ async function handleRequest(request, env, ctx) {
   
   // Route requests
   switch (path) {
+    case '/responses':
+      // OpenAI Responses API native endpoint (PRIMARY)
+      return handleResponsesAPI(request, env);
+      
     case '/mcp':
-      // MCP protocol endpoint (for OpenAI Responses API)
-      return handleMCP(request, env);
+      // Legacy MCP protocol endpoint (DEPRECATED - use /responses)
+      return handleLegacyMCP(request, env);
       
     case '/sse':
       // Server-Sent Events endpoint
@@ -319,14 +368,17 @@ async function handleRequest(request, env, ctx) {
       // Root endpoint - basic info
       return new Response(JSON.stringify({
         name: 'Sports Proxy',
-        version: '1.0.0',
+        version: '2.0.0',
+        api: 'OpenAI Responses API Native',
         endpoints: {
-          mcp: '/mcp',
-          sse: '/sse',
-          stream: '/stream',
-          health: '/health'
+          responses: '/responses (PRIMARY - OpenAI Responses API)',
+          mcp: '/mcp (DEPRECATED - use /responses)',
+          sse: '/sse (Server-Sent Events)',
+          stream: '/stream (Streamable HTTP)',
+          health: '/health (Health Check)'
         },
-        description: 'MCP orchestrator for sports data with caching and streaming'
+        description: 'OpenAI Responses API native orchestrator for sports data with advanced caching and streaming',
+        migration: 'All new integrations should use /responses endpoint with OpenAI Responses API format'
       }), {
         headers: { "Content-Type": "application/json", ...getCorsHeaders() }
       });
@@ -336,6 +388,58 @@ async function handleRequest(request, env, ctx) {
         status: 404,
         headers: getCorsHeaders()
       });
+  }
+}
+
+/**
+ * RateLimiter Durable Object for rate limiting and coordination
+ */
+export class RateLimiter {
+  constructor(state, env) {
+    this.state = state;
+    this.env = env;
+  }
+
+  async fetch(request) {
+    // Simple rate limiting implementation
+    const url = new URL(request.url);
+    const key = url.searchParams.get('key') || 'default';
+    const limit = parseInt(url.searchParams.get('limit') || '100');
+    const window = parseInt(url.searchParams.get('window') || '60'); // seconds
+
+    const currentTime = Math.floor(Date.now() / 1000);
+    const windowStart = currentTime - window;
+
+    // Get current count
+    const currentCount = await this.state.storage.get(`count:${key}`) || 0;
+    const lastReset = await this.state.storage.get(`reset:${key}`) || 0;
+
+    // Reset if window expired
+    if (lastReset < windowStart) {
+      await this.state.storage.put(`count:${key}`, 1);
+      await this.state.storage.put(`reset:${key}`, currentTime);
+      return new Response(JSON.stringify({ allowed: true, remaining: limit - 1 }), {
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    // Check limit
+    if (currentCount >= limit) {
+      return new Response(JSON.stringify({ allowed: false, remaining: 0 }), {
+        status: 429,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    // Increment counter
+    await this.state.storage.put(`count:${key}`, currentCount + 1);
+    
+    return new Response(JSON.stringify({ 
+      allowed: true, 
+      remaining: limit - currentCount - 1 
+    }), {
+      headers: { "Content-Type": "application/json" }
+    });
   }
 }
 

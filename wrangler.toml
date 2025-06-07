@@ -5,8 +5,8 @@ compatibility_date = "2025-01-06"
 # KV for edge caching
 [[kv_namespaces]]
 binding = "SPORTS_CACHE"
-id = "your-kv-namespace-id"
-preview_id = "your-preview-kv-namespace-id"
+id = "f99c4a83cc5948d6979ac2efd7d7c7a8"
+preview_id = "71977fcf6ac442c6bba1ea85d7a6d6d8"
 
 # R2 for cold storage
 [[r2_buckets]]
@@ -18,11 +18,23 @@ bucket_name = "sports-data-bucket"
 name = "RATE_LIMITER"
 class_name = "RateLimiter"
 
+# Durable Object migrations (SQLite for free plan)
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RateLimiter"]
+
+# Service Bindings - zero-latency worker-to-worker communication
+[[services]]
+binding = "MLB_MCP"
+service = "mlbstats-mcp"
+
+# Will add ESPN when ready
+# [[services]]
+# binding = "ESPN_MCP"  
+# service = "espn-mcp"
+
 # Environment variables
 [vars]
-MLB_MCP_URL = "https://mlbstats-mcp.gerrygugger.workers.dev"
-ESPN_MCP_URL = "https://espn-mcp.your-domain.workers.dev"
-OPENAI_API_KEY = ""
 CACHE_TTL_HOT = "10"
 CACHE_TTL_COLD = "300"
 

@@ -1,7 +1,7 @@
 {
   "name": "sports-proxy",
-  "version": "1.0.0",
-  "description": "Sports Proxy - MCP orchestrator with caching and streaming for sports data",
+  "version": "2.0.0",
+  "description": "Sports Proxy - OpenAI Responses API native orchestrator with advanced caching and streaming",
   "main": "src/index.js",
   "scripts": {
     "dev": "wrangler dev",
@@ -9,10 +9,21 @@
     "tail": "wrangler tail",
     "test": "echo \"No tests specified yet\" && exit 0"
   },
-  "keywords": ["sports", "mcp", "proxy", "cloudflare", "worker", "streaming", "cache"],
+  "keywords": [
+    "sports",
+    "openai",
+    "responses-api", 
+    "mcp",
+    "proxy",
+    "cloudflare",
+    "worker",
+    "streaming",
+    "cache",
+    "gpt-4.1"
+  ],
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "wrangler": "^3.0.0"
+    "wrangler": "^4.19.1"
   }
 }

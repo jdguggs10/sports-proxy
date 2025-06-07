@@ -5,7 +5,7 @@
  * Tests the main components without deployment
  */
 
-const { MCPOrchestrator } = require('./src/mcp/orchestrator');
+const { ResponsesAPIOrchestrator } = require('./src/mcp/orchestrator');
 const { CacheManager } = require('./src/cache/manager');
 const { transformMLBTeam } = require('./src/schemas/sports');
 
@@ -21,7 +21,7 @@ const mockEnv = {
 async function testOrchestrator() {
   console.log('🧪 Testing MCP Orchestrator...');
   
-  const orchestrator = new MCPOrchestrator(mockEnv);
+  const orchestrator = new ResponsesAPIOrchestrator(mockEnv);
   
   // Test tool listing
   const tools = await orchestrator.listTools();
