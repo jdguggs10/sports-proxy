@@ -1,0 +1,33 @@
+name = "sports-proxy"
+main = "src/index.js"
+compatibility_date = "2025-01-06"
+
+# KV for edge caching
+[[kv_namespaces]]
+binding = "SPORTS_CACHE"
+id = "your-kv-namespace-id"
+preview_id = "your-preview-kv-namespace-id"
+
+# R2 for cold storage
+[[r2_buckets]]
+binding = "SPORTS_STORAGE"
+bucket_name = "sports-data-bucket"
+
+# Durable Objects for rate limiting and coordination
+[[durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiter"
+
+# Environment variables
+[vars]
+MLB_MCP_URL = "https://mlbstats-mcp.gerrygugger.workers.dev"
+ESPN_MCP_URL = "https://espn-mcp.your-domain.workers.dev"
+OPENAI_API_KEY = ""
+CACHE_TTL_HOT = "10"
+CACHE_TTL_COLD = "300"
+
+[env.production]
+vars = { ENVIRONMENT = "production" }
+
+[env.development]
+vars = { ENVIRONMENT = "development" }

@@ -1,0 +1,18 @@
+{
+  "name": "sports-proxy",
+  "version": "1.0.0",
+  "description": "Sports Proxy - MCP orchestrator with caching and streaming for sports data",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "test": "echo \"No tests specified yet\" && exit 0"
+  },
+  "keywords": ["sports", "mcp", "proxy", "cloudflare", "worker", "streaming", "cache"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}
